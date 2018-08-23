@@ -44,13 +44,19 @@ int mallocp(int size){
 
 }
 
-void *retrieve_memory(int MUID){
+struct mem_block_meta *retrieve_memory_meta_block(int MUID){
 	struct mem_block_meta* current = global_top;
 	while(current && current->MUID != MUID){
 		current = current->next;
 	}
-	return current+1;
+	return current;
 }
+
+void *retrieve_memory(int MUID){
+	return retrieve_memory_meta_block(MUID) + 1;
+}
+
+
 
 int main(void){
 	int number1ID = mallocp(sizeof(int));
