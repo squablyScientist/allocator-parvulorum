@@ -6,7 +6,7 @@ typedef unsigned char byte;
 
 struct mem_block_meta{
 	int size;
-	int UID;
+	int MUID;
 	struct mem_block_meta* next;
 };
 
@@ -14,7 +14,7 @@ struct mem_block_meta{
 static struct mem_block_meta* global_top;
 
 
-static int top_UID = 0;
+static int top_MUID = 0;
 
 struct mem_block_meta *request_mem_block(int size){
 
@@ -30,8 +30,8 @@ struct mem_block_meta *request_mem_block(int size){
 
 	meta->size = size;
 
-	meta->UID = top_UID;
-	top_UID++;
+	meta->MUID = top_MUID;
+	top_MUID++;
 	
 	return meta;
 }
@@ -40,13 +40,13 @@ struct mem_block_meta *request_mem_block(int size){
 int mallocp(int size){
 
 	struct mem_block_meta* block = request_mem_block(size);
-	return block -> UID;
+	return block -> MUID;
 
 }
 
-void *retrieve_memory(int UID){
+void *retrieve_memory(int MUID){
 	struct mem_block_meta* current = global_top;
-	while(current && current->UID != UID){
+	while(current && current->MUID != MUID){
 		current = current->next;
 	}
 	return current+1;
