@@ -1,11 +1,9 @@
 CC = gcc
-CFLAGS = -pedantic -std=c99 -Wall -Wextra -Werror
-
+CFLAGS = -pedantic -Wall -Wextra -Werror -fsanitize=address -ggdb
 allocator: allpar.o
 	$(CC) $(CFLAGS) allpar.o -o allpar
-
 allpar.o: allpar.c
-	$(CC)  $(CFLAGS) -c allpar.c 
+	$(CC) $(CFLAGS) -c allpar.c 
 
 clean:
 	rm *.o 
