@@ -92,6 +92,39 @@ void *retrieve_memory(int MUID){
 	return retrieve_memory_meta_block(MUID) + 1;
 }
 
+/**
+ * TODO rewrite this at some point to make it more organized.
+ *
+ * This function simply copys all memory in the heap that is at address addr or
+ * higher down nbytes. This has the potential to overwrite all memory in the
+ * range [addr-nbytes, addr], so it is imperative that the memory contained
+ * there is no longer needed. 
+ *
+ * @param addr: The address of the first byte that will be moved down. 
+ * @param nbytes: The number of bytes that all memory will be moved down by. For
+ * example, if there is a character 'X' at 0x10, and nbytes = 15, then after
+ * this function is run there will be a character 'X' at 0x01.
+ */
+void cpymemdown(void* addr, int nbytes){
+	for(byte* i = addr; i < (byte*)sbrk(0); i++){
+		*(i-nbytes) = *i;
+	}
+}
+
+void freep(int MUID){
+	struct mem_block_meta* doomed_block = retrieve_memory_meta_block(MUID);
+	int total_size = doomed_block-> size + sizeof(struct mem_block_meta);
+
+	cpymemdown(next_block(doomed_block), total_size);
+
+	// Moves the pointer to the NUL terminator down accordingly
+	global_top = (struct mem_block_meta*)((char*)global_top - total_size);
+
+	// Moves the program break down accordingly
+	sbrk(-total_size);
+}
+	
+
 
 int main(void){
 	int number1ID = mallocp(sizeof(int));
@@ -106,6 +139,11 @@ int main(void){
 	printf("%d\n", *(int*)retrieve_memory(number1ID));
 	printf("%s\n", (char*)retrieve_memory(stringID));
 	printf("%d\n", *(int*)retrieve_memory(number2ID));
+
+	freep(number1ID);
+	printf("%d\n", *(int*)retrieve_memory(number2ID));
+	printf("%s\n", (char*)retrieve_memory(stringID));
+
 	
 
 	return 0;
