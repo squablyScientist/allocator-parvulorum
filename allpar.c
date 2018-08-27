@@ -69,6 +69,10 @@ int mallocp(int size){
 
 }
 
+struct mem_block_meta* next_block(struct mem_block_meta* meta){
+	return (struct mem_block_meta*)((char*)meta + meta->size + \
+			sizeof(struct mem_block_meta));
+}
 struct mem_block_meta *retrieve_memory_meta_block(int MUID){
 	struct mem_block_meta* current = global_bot;
 	while(current != global_top && current->MUID != MUID){
@@ -76,8 +80,7 @@ struct mem_block_meta *retrieve_memory_meta_block(int MUID){
 		//Sets the current ptr to look at the next mem_block_meta. This will not
 		//overflow into unallocated memory as the while loop makes sure that
 		//current is not the global_top.
-		current = (struct mem_block_meta*)((char*)current + current->size + \
-				sizeof(struct mem_block_meta));
+		current = next_block(current); 
 	}
 	
 	// Returns NULL if traversing the heap did not find the MUID asked for, i.e.
