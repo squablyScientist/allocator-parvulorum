@@ -1,16 +1,45 @@
 //TODO: convert all comments that span multiple lines into block comments
+//TODO: figure out a way to release the zero block and reset globals to NULL if
+//there is no memory being used. 
+
+/**
+ * allpar.c - Allocātor Parvulōrum.
+ *
+ * Author: Collin Tod
+ *
+ * A memory allocator that only uses exactly what it needs from the kernel and
+ * no more. A program using this as their sole memory allocator will not hold
+ * more memory than it is actively using. This makes this allocator ideal to
+ * use on low memory systems for programs that do not need a massive amount of
+ * speed during runtime. 
+ *
+ * This allocator achieves this by actively moving the entire heap every time a
+ * free takes place. By doing this, the program break remains as small as
+ * possible while still holding all currently in use information. This also
+ * seconds as a built in defrag upon every free. 
+ */
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include "allpar.h"
 
 typedef unsigned char byte;
 
+#ifndef MEM_BLOCK_META_DEF
 struct mem_block_meta{
 	int size;
 	int MUID;
 	//struct mem_block_meta* next;
 };
+#endif
 
+
+// Function Declarations
+static struct mem_block_meta *request_mem_block(int size);
+static struct mem_block_meta* push_zero_block();
+static struct mem_block_meta* next_block(struct mem_block_meta* meta);
+static struct mem_block_meta *retrieve_memory_meta_block(int MUID);
+static void cpymemdown(void* addr, int nbytes);
 
 static struct mem_block_meta* global_top;
 static struct mem_block_meta* global_bot;
@@ -23,15 +52,24 @@ static int top_MUID = 1;
  *
  * @return: a pointer to this new mem_block_meta
  */
-struct mem_block_meta* push_zero_block(){
+static struct mem_block_meta* push_zero_block(){
+
+	// Maps a mem_block_meta to the current top of the heap
 	struct mem_block_meta* zero_block = sbrk(0);
+
+	// Grows the heap by the size of a  mem_block_meta, just enough to fit the
+	// zero_block
 	sbrk(sizeof(struct mem_block_meta));
+
+
+	// Guarentees that the zero block is full of 0s
 	zero_block->size = 0;
 	zero_block->MUID = 0;
+
 	return zero_block;
 }
 
-struct mem_block_meta *request_mem_block(int size){
+static struct mem_block_meta *request_mem_block(int size){
 
 	// Creates the very first 0 block in order to act as a base. Is only run the
 	// very first allocation. 
@@ -60,7 +98,6 @@ struct mem_block_meta *request_mem_block(int size){
 
 	return meta;
 }
-	
 
 int mallocp(int size){
 
@@ -69,11 +106,12 @@ int mallocp(int size){
 
 }
 
-struct mem_block_meta* next_block(struct mem_block_meta* meta){
+static struct mem_block_meta* next_block(struct mem_block_meta* meta){
 	return (struct mem_block_meta*)((char*)meta + meta->size + \
 			sizeof(struct mem_block_meta));
 }
-struct mem_block_meta *retrieve_memory_meta_block(int MUID){
+
+static struct mem_block_meta *retrieve_memory_meta_block(int MUID){
 	struct mem_block_meta* current = global_bot;
 	while(current != global_top && current->MUID != MUID){
 
@@ -105,7 +143,7 @@ void *retrieve_memory(int MUID){
  * example, if there is a character 'X' at 0x10, and nbytes = 15, then after
  * this function is run there will be a character 'X' at 0x01.
  */
-void cpymemdown(void* addr, int nbytes){
+static void cpymemdown(void* addr, int nbytes){
 	for(byte* i = addr; i < (byte*)sbrk(0); i++){
 		*(i-nbytes) = *i;
 	}
@@ -143,8 +181,6 @@ int main(void){
 	freep(number1ID);
 	printf("%d\n", *(int*)retrieve_memory(number2ID));
 	printf("%s\n", (char*)retrieve_memory(stringID));
-
-	
 
 	return 0;
 }
