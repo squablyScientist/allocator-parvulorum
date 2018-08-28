@@ -69,6 +69,23 @@ static struct mem_block_meta* push_zero_block(){
 	return zero_block;
 }
 
+/**
+ * Primarily moves the program break up to accomadate for a new memory block,
+ * and fills the mem_meta_block with the argument size and a new MUID.
+ *
+ * A small side-effect is that this function also inserts a zero block on top of
+ * the heap to act as a NUL terminator for traversal of the heap when looking
+ * for a specific memory block. 
+ *
+ * This also updates the global_top global variable to point to the new zero
+ * block that was just added.
+ *
+ * @param size: The size of the memory to ask for in addition to the size of the
+ * 				metadata
+ *
+ * @returns: A pointer to the beginning of the memory just sbrk()ed, effectively
+ * 				a pointer to a new mem_block_meta
+ */
 static struct mem_block_meta *request_mem_block(int size){
 
 	// Creates the very first 0 block in order to act as a base. Is only run the
@@ -99,6 +116,26 @@ static struct mem_block_meta *request_mem_block(int size){
 	return meta;
 }
 
+/**
+ * Allocates size bytes of memory for the caller to use. This method of memory
+ * allocation is different from libc's malloc as it does not do much bookkeeping
+ * about whether or not a memory block has been freed or not. When an allocation
+ * is performed, the following information is placed into memory at the top of
+ * the heap in the form of a metadata block:
+ *
+ *		- The size in bytes of the succeeding memory block
+ *		- A unique identifier for this block of memory.
+ *
+ * The program break is then in total is moved up the number of bytes 
+ * requested plus the size of the metadata block. 
+ *
+ * The function then returns the MUID of the block for use in retrieving the
+ * memory as well as freeing it. 
+ *
+ * @param size: The size in bytes of memory being requested.
+ *
+ * @return: A M(emory) UID that corresponds to the memory just allocated.
+ */
 int mallocp(int size){
 
 	struct mem_block_meta* block = request_mem_block(size);
@@ -106,11 +143,36 @@ int mallocp(int size){
 
 }
 
+/** 
+ * Given a mem_block_meta*, and using the size of the succeeding memory block,
+ * this function simply returns the address of the mem_meta_block after the
+ * argument meta.
+ *
+ * @param meta: a pointer to a mem_block_meta
+ *
+ * @returns: A pointer to the succeeding mem_block_meta of meta
+ */
 static struct mem_block_meta* next_block(struct mem_block_meta* meta){
 	return (struct mem_block_meta*)((char*)meta + meta->size + \
 			sizeof(struct mem_block_meta));
 }
 
+/**
+ * Given a MUID, this function returns a pointer to the mem_block_meta that
+ * contains that MUID.
+ *
+ * It achieves this by simply traversing every block since the first one
+ * allocated, looking for one that has the same MUID as the argument. This could
+ * be improved with binary search theoretically, since the MUIDs are always
+ * sorted, however the current method of indexing makes this difficult since
+ * there are mulitple sized blocks of memory, and thus must be at least an O(n)
+ * operation to even look at a specific mem_block_meta.
+ *
+ * @param MUID: The M(emory)UID of the memory block being searched for.
+ *
+ * @returns: A pointer to the mem_block_meta containing MUID, provided it
+ * 				exists. If it doesn't exist, returns NULL.
+ */
 static struct mem_block_meta *retrieve_memory_meta_block(int MUID){
 	struct mem_block_meta* current = global_bot;
 	while(current != global_top && current->MUID != MUID){
@@ -126,6 +188,19 @@ static struct mem_block_meta *retrieve_memory_meta_block(int MUID){
 	return current == global_top ? NULL : current;
 }
 
+/**
+ * This function retrieves the memory address of a block of memory allocated by
+ * mallocp(...). Since each block of memory has a meta block directly preceeding
+ * it in memory, & that memory block contains a UID for that block of memory as
+ * well as the size of the succeeding memory, it is trivial to traverse memory
+ * to find the correct block given its MUID.
+ *
+ * @param MUID: The M(emory)UID of the memory block to be found. This is
+ * obtained from mallocp.
+ *
+ * @return: A pointer to the block of memory which has a metablock containing
+ * MUID preceeding it.
+ */
 void *retrieve_memory(int MUID){
 	return retrieve_memory_meta_block(MUID) + 1;
 }
@@ -149,6 +224,20 @@ static void cpymemdown(void* addr, int nbytes){
 	}
 }
 
+/**
+ * Releases the memory block with MUID back to the kernel, destroying its
+ * contents. This implementation of free moves all memory above the memory block
+ * specified down to overwrite the memory to be freed. This allows a simple
+ * reduction of the program break without destorying any in use information. 
+ *
+ * A side effect of this method of freeing memory is that there is no wasted or
+ * fragmented memory in the heap, since every free is an automatic defrag. The
+ * program break will always be as small as possible as well, thus reducing
+ * uneeded memory being held by the process. All memory that would be marked as
+ * freed is simply returned to the kernel.
+ *
+ * @param MUID: The M(emory)UID of the memory block to be freed.
+*/
 void freep(int MUID){
 	struct mem_block_meta* doomed_block = retrieve_memory_meta_block(MUID);
 	int total_size = doomed_block-> size + sizeof(struct mem_block_meta);
